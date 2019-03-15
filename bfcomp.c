@@ -16,9 +16,6 @@ void execute( const char * filename) {
 
    char array[MEMSIZE] = {0}                   ;
 
-  // for (int i = 0 ; i < MEMSIZE ; i++ ) {array[i] = '\0';} ;
-   
-
    char *ptr=array                             ;
 
    int  counter = 0                            ;
