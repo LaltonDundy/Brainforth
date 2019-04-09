@@ -1,5 +1,3 @@
-{-#LANGUAGE GADTs #-}
-
 module Desugar where
 
 data Tokes = ID String
@@ -59,13 +57,12 @@ type TokeStack = ( Maybe String , [ Tokes ] )
 addDef :: (Dictionary d) => d -> TokeStack -> d
 addDef dict (Just name, stack) = newWord dict name (reverse stack)
 
-data Runnable  d where 
-    RUN :: (Dictionary d) => [ (d , [Tokes ]) ] -> Runnable d
+newtype Runnable d = RUN [ ( d , [Tokes ]) ]
 
 startRun :: Runnable Table
 startRun = RUN [ ( emptyD , [] ) ]
 
-introduce :: TokeStack -> Runnable d -> Runnable d
+introduce :: (Dictionary d) => TokeStack -> Runnable d -> Runnable d
 introduce stack ( RUN (( dict , prog ) : xs)) = RUN $ (addDef dict stack , []) : (dict , prog) : xs
 
 parse  ::  (Dictionary d) => 
