@@ -12,13 +12,11 @@ iterate' (x:xs) prev          = readFile x >>=
                                 \s -> iterate' xs (prev ++ s)
 
 norun  = flag "-norun"
-flag f = \args -> (/=) [] (filter ( (==) f  )  args)
+flag f args = (/=) [] (filter ( f == )  args)
 
 main = do
     args      <- getArgs
     wholeProg <- iterate' args [] 
     writeFile "output" ( evaluate wholeProg )
     unless (norun args) $
-           return "output" >>= newCString  >>= execute
-    
-
+         newCString "output" >>= execute
