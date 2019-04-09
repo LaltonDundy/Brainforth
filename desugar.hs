@@ -24,9 +24,8 @@ isNative _      = True
 
 getBasic  :: (Dictionary d) => d -> [ Tokes ] -> [ Tokes ]
 getBasic dict tokes
-    | foldl (&&) True $ map isNative tokes = tokes
-    | otherwise  = concat $ 
-                   map ( \x -> 
+    | all isNative tokes = tokes
+    | otherwise          = concatMap ( \x -> 
                             ( case x of
                                 ID str ->  recursiveSearch str 
                                 rest   -> [ rest ] )
@@ -37,7 +36,7 @@ getBasic dict tokes
                 Just ( defin , newDict ) -> getBasic newDict defin
                 Nothing                  -> error $ "String not found: " <> str
 
-data Table = Table [ ( String , [Tokes ] ) ]
+newtype Table = Table [ ( String , [Tokes ] ) ]
     deriving (Show)
 
 class (Show a) => Dictionary a where
@@ -64,10 +63,10 @@ data Runnable  d where
     RUN :: (Dictionary d) => [ (d , [Tokes ]) ] -> Runnable d
 
 startRun :: Runnable Table
-startRun = RUN $ ( emptyD , [] ) : []
+startRun = RUN [ ( emptyD , [] ) ]
 
 introduce :: TokeStack -> Runnable d -> Runnable d
-introduce stack ( RUN (( dict , prog ) : xs)) = RUN $ (( addDef dict stack ) , []) : (dict , prog) : xs
+introduce stack ( RUN (( dict , prog ) : xs)) = RUN $ (addDef dict stack , []) : (dict , prog) : xs
 
 parse  ::  (Dictionary d) => 
             Runnable d  ->
@@ -80,43 +79,42 @@ parse past prog ( Just name , lst ) =
                  ";" : rest -> 
                     let new = introduce (Just name , lst ) past in
                     parse  new rest (Nothing , [])
-                 ("<" : xs)  -> parse past xs (Just name , (MoveLeft : lst) )
-                 (">" : xs)  -> parse past xs (Just name , (MoveRight : lst) )
-                 ("," : xs)  -> parse past xs (Just name , (GetByte : lst) )
-                 ("." : xs)  -> parse past xs (Just name , (Output : lst) )
-                 ("+" : xs)  -> parse past xs (Just name , (Inc : lst) )
-                 ("-" : xs)  -> parse past xs (Just name , (Dec: lst) )
-                 ("[" : xs)  -> parse past xs (Just name , (StartWhile: lst) )
-                 ("]" : xs)  -> parse past xs (Just name , (EndWhile: lst) )
-                 (x   : xs)  -> parse past xs (Just name , ((ID x) : lst) )
+                 ("<" : xs)  -> parse past xs (Just name , MoveLeft  : lst)
+                 (">" : xs)  -> parse past xs (Just name , MoveRight : lst)
+                 ("," : xs)  -> parse past xs (Just name , GetByte   : lst)
+                 ("." : xs)  -> parse past xs (Just name , Output    : lst)
+                 ("+" : xs)  -> parse past xs (Just name , Inc       : lst)
+                 ("-" : xs)  -> parse past xs (Just name , Dec       : lst)
+                 ("[" : xs)  -> parse past xs (Just name , StartWhile: lst)
+                 ("]" : xs)  -> parse past xs (Just name , EndWhile  : lst)
+                 (x   : xs)  -> parse past xs (Just name , ID x : lst)
                  []          -> error "non finished word definition"
 
-parse (RUN ( (x , y) : [])) [] (Nothing , lst) = RUN $ ( emptyD , (reverse lst) ) : []
+parse (RUN [(x , y)]) [] (Nothing , lst) = RUN [(emptyD , reverse lst)]
 parse past prog (Nothing , lst) =
             case prog of
                  [] -> past
-                 (":" : name : rest) -> parse past rest (Just name, [] )
-                 ("<" : xs)  -> parse past xs (Nothing , (MoveLeft : lst) )
-                 (">" : xs)  -> parse past xs (Nothing , (MoveRight : lst) )
-                 ("," : xs)  -> parse past xs (Nothing , (GetByte : lst) )
-                 ("." : xs)  -> parse past xs (Nothing , (Output : lst) )
-                 ("+" : xs)  -> parse past xs (Nothing , (Inc : lst) )
-                 ("-" : xs)  -> parse past xs (Nothing , (Dec: lst) )
-                 ("[" : xs)  -> parse past xs (Nothing , (StartWhile: lst) )
-                 ("]" : xs)  -> parse past xs (Nothing , (EndWhile: lst) )
-                 (x:xs)      -> (
+                 (":" : name : rest) -> parse past rest (Just name, [])
+                 ("<" : xs)  -> parse past xs (Nothing , MoveLeft   : lst)
+                 (">" : xs)  -> parse past xs (Nothing , MoveRight  : lst)
+                 ("," : xs)  -> parse past xs (Nothing , GetByte    : lst) 
+                 ("." : xs)  -> parse past xs (Nothing , Output     : lst)
+                 ("+" : xs)  -> parse past xs (Nothing , Inc        : lst)
+                 ("-" : xs)  -> parse past xs (Nothing , Dec        : lst)
+                 ("[" : xs)  -> parse past xs (Nothing , StartWhile : lst)
+                 ("]" : xs)  -> parse past xs (Nothing , EndWhile   : lst)
+                 (x:xs)      -> 
                         case past of
-                            RUN (( d , rcrd ) : tl) -> parse (RUN $ ( (d ,((ID x )): rcrd)) : tl) xs (Nothing , lst)
+                            RUN (( d , rcrd ) : tl) -> parse (RUN ( (d , ID x : rcrd) : tl)) xs (Nothing , lst)
                             _ -> error "This is not suppose to happen"
-                            )
 
 toTokes :: (Dictionary d) => Runnable d -> [Tokes] -> [ Tokes ]
 toTokes (RUN ( (dict , [] )  : rest )) tokes = toTokes (RUN rest) tokes
-toTokes (RUN ((dict , prog)  : rest )) tokes = toTokes (RUN rest)  (  (getBasic dict prog ) ++ tokes)
+toTokes (RUN ((dict , prog)  : rest )) tokes = toTokes (RUN rest) ( getBasic dict prog ++ tokes )
 toTokes (RUN [] )                      tokes = tokes
 
 write   :: [ Tokes ] -> String
-write   = concat . ( map show )
+write   = concatMap show
 
 decomment' :: String -> Bool -> String
 decomment' "("         _    = error "unended comment"
@@ -124,10 +122,10 @@ decomment' ""         True  = error "unended comment"
 decomment' (')' : xs) True  = decomment' xs False
 decomment' ('(' : xs) False = decomment' xs True
 decomment' (x:xs)     True  = decomment' xs True
-decomment' (x:xs)     False = x : (decomment' xs False)
+decomment' (x:xs)     False = x : decomment' xs False
 decomment' []          _    = []
 
-decomment = \str -> decomment' str False
+decomment str = decomment' str False
 
 evaluate :: String -> String
 evaluate str = write $  toTokes ( parse startRun (words . decomment $ str) (Nothing , []) ) []
